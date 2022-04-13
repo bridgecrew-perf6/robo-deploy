@@ -1,0 +1,20 @@
+{
+    "name": "daggerhartlab/robo-deploy",
+    "type": "robo-tasks",
+    "authors": [
+        {
+            "name": "Jonathan Daggerhart",
+            "email": "jonathan@daggerhartlab.com"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "DagLab\\RoboDeploy\\": "src/"
+        }
+    },
+    "require": {
+        "consolidation/robo": "^2",
+        "symfony/var-dumper": "^5.4",
+        "kerasai/robo-config": "^1.0"
+    }
+}

@@ -1,0 +1,11 @@
+.idea
+.DS_Store
+*.zip
+*.tar
+*.tgz
+/vendor
+/web/*
+!/web/.gitkeep
+
+# Local config.
+robo.yml

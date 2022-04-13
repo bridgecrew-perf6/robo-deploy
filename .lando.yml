@@ -1,0 +1,13 @@
+name: robo-deploy
+recipe: lamp
+config:
+  webroot: web
+
+tooling:
+  which:
+    service: appserver
+    cmd: which
+
+  robo:
+    service: appserver
+    cmd: robo
