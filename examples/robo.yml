@@ -1,13 +1,16 @@
 app:
   root: /app/web
+
 version:
   strategy: datetime             # incremental|datetime - default: datetime
   filename: .robo-deploy-version # default: '.robo-deploy-version'
+
 release:
   remote: origin # default: origin
   branch: test   # default: current branch name
   sync_branches: # Optionally sync additional branches on release commit.
     - production
+
 deployment:
   remote: origin # default: origin
   branch: test   # default: current branch name

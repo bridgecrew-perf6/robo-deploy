@@ -127,6 +127,81 @@ class RoboFile extends \Robo\Tasks
   }
 
   /**
+   * Deploy a tag of the app.
+   *
+   * @param array $options
+   *
+   * @return void
+   */
+  public function deployTag(array $options = [
+    'reset' => TRUE,
+    'tag|t' => NULL,
+  ]) {
+    if (!$this->isDeploymentEnvironment) {
+      throw new \RuntimeException("Cannot perform deployment within configuration.");
+    }
+
+    $tag = $options['tag'];
+
+    // Fetch changes and checkout the latest version file.
+    if (!$tag) {
+      $this->taskExecStack()
+        ->stopOnFail()
+        ->dir($this->appRoot)
+        ->exec('git fetch --all --prune')
+        ->exec("git checkout {$this->deploymentRemote}/{$this->deploymentBranch} -- {$this->versionFilename}")
+        ->run();
+
+      $tag = $this->getAppVersion();
+    }
+
+    if ($options['reset']) {
+      $this->taskExecStack()
+        ->stopOnFail()
+        ->dir($this->appRoot)
+        ->exec("git reset --hard {$this->deploymentRemote}/{$this->deploymentBranch}")
+        ->run();
+    }
+
+    $this->taskGitStack()
+      ->stopOnFail()
+      ->dir($this->appRoot)
+      ->checkout($tag)
+      ->run();
+  }
+
+  /**
+   * Deploy a branch updates.
+   *
+   * @param array $options
+   *
+   * @return void
+   * @throws \Robo\Exception\TaskException
+   */
+  public function deployBranch(array $options = [
+    'reset' => TRUE,
+    'branch|b' => NULL,
+  ]) {
+    if (!$this->isDeploymentEnvironment) {
+      throw new \RuntimeException("Cannot perform deployment within configuration.");
+    }
+
+    $branch = $options['branch'] ?? $this->requireConfigVal('deployment.branch');
+    $this->taskExecStack()
+      ->stopOnFail()
+      ->dir($this->appRoot)
+      ->exec('git fetch --all --prune')
+      ->run();
+
+    $this->taskGitStack()
+      ->stopOnFail()
+      ->dir($this->appRoot)
+      ->checkout($branch)
+      ->pull($this->deploymentRemote, $branch)
+      ->run();
+  }
+
+  /**
    * Get the current tracked app version.
    *
    * @return string
