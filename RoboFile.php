@@ -189,10 +189,15 @@ class RoboFile extends \Robo\Tasks
     'reset' => TRUE,
     'branch|b' => NULL,
   ]) {
+    $this->deploymentBranch = $options['branch'] ?? $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
+
     if (!$this->isDeploymentEnvironment) {
       throw new \RuntimeException("Cannot perform deployment within configuration.");
     }
-    $this->deploymentBranch = $options['branch'] ?? $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
+    if (!$this->deploymentBranch) {
+      throw new \RuntimeException("Cannot perform deployment. No branch defined.");
+    }
+
     $this->taskExecStack()
       ->stopOnFail()
       ->dir($this->appRoot)
