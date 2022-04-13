@@ -1,0 +1,4 @@
+app_root: /app/web
+version:
+  strategy: datetime # incremental|datetime - default: datetime
+  filename: .robo-deploy-version # default: '.robo-deploy-version'

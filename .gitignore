@@ -8,4 +8,4 @@
 !/web/.gitkeep
 
 # Local config.
-robo.yml
+/robo.yml
