@@ -10,6 +10,7 @@ class RoboFile extends \Robo\Tasks
   use \Kerasai\Robo\Config\ConfigHelperTrait;
 
   protected $appRoot;
+  protected $appDefaultBranch;
   protected $versionFile;
   protected $versionStrategies = ['datetime', 'incremental'];
   protected $versionStrategy = 'datetime';
@@ -19,7 +20,8 @@ class RoboFile extends \Robo\Tasks
    * RoboFile constructor.
    */
   public function __construct() {
-    $this->appRoot = $this->requireConfigVal('app_root');
+    $this->appRoot = $this->requireConfigVal('app.root');
+    $this->appDefaultBranch = $this->requireConfigVal('app.default_branch');
 
     if ($this->getConfigVal('version.filename')) {
       $this->versionFilename = $this->getConfigVal('version.filename');
@@ -29,6 +31,21 @@ class RoboFile extends \Robo\Tasks
     }
 
     $this->versionFile = rtrim($this->appRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $this->versionFilename;
+  }
+
+  /**
+   *
+   * @return void
+   * @throws \Robo\Exception\TaskException
+   */
+  public function configValidate() {
+    dump([
+      'current app branch' => $this->getAppGitBranch(),
+      'current app version' => $this->getAppVersion(),
+      'version strategy' => $this->versionStrategy,
+      'version file' => $this->versionFile,
+      'version file exists' => file_exists($this->versionFile),
+    ]);
   }
 
   /**
@@ -50,7 +67,7 @@ class RoboFile extends \Robo\Tasks
       ->dir($this->appRoot)
       ->add('-A')
       ->commit($options['message'])
-      ->push('origin', 'test')
+      ->push('origin', $this->getAppGitBranch())
       ->run();
   }
 
@@ -72,6 +89,25 @@ class RoboFile extends \Robo\Tasks
    */
   protected function getAppVersion() {
     return $this->taskSemVer($this->versionFile)->__toString();
+  }
+
+  /**
+   * @return string|null
+   * @throws \Robo\Exception\TaskException
+   */
+  public function getAppGitBranch() {
+    $result = $this->taskExec('git')
+      ->dir($this->appRoot)
+      ->args('symbolic-ref', 'HEAD')
+      ->printOutput(false)
+      ->run();
+
+    if (empty($result->getOutputData())) {
+      return $this->appDefaultBranch;
+    }
+
+    $parts = explode('/', $result->getOutputData());
+    return end($parts);
   }
 
   /**

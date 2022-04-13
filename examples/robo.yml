@@ -1,4 +1,6 @@
-app_root: /app/web
+app:
+  root: /app/web
+  default_branch: test
 version:
   strategy: datetime # incremental|datetime - default: datetime
   filename: .robo-deploy-version # default: '.robo-deploy-version'
