@@ -102,6 +102,7 @@ class RoboFile extends \Robo\Tasks
           ->push($this->releaseRemote, $branch);
       }
 
+      $git->checkout($this->releaseBranch);
       $git->run();
     }
   }
