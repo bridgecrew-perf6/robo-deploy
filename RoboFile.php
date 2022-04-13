@@ -10,7 +10,13 @@ class RoboFile extends \Robo\Tasks
   use \Kerasai\Robo\Config\ConfigHelperTrait;
 
   protected $appRoot;
-  protected $appDefaultBranch;
+  protected $isReleaseEnvironment = FALSE;
+  protected $releaseRemote;
+  protected $releaseBranch;
+  protected $isDeploymentEnvironment = FALSE;
+  protected $isTagDeployment = FALSE;
+  protected $deploymentRemote;
+  protected $deploymentBranch;
   protected $versionFile;
   protected $versionStrategies = ['datetime', 'incremental'];
   protected $versionStrategy = 'datetime';
@@ -21,7 +27,15 @@ class RoboFile extends \Robo\Tasks
    */
   public function __construct() {
     $this->appRoot = $this->requireConfigVal('app.root');
-    $this->appDefaultBranch = $this->requireConfigVal('app.default_branch');
+
+    $this->isReleaseEnvironment = (bool) $this->getConfigVal('release.branch');
+    $this->releaseRemote = $this->getConfigVal('release.remote') ?? 'origin';
+    $this->releaseBranch = $this->getConfigVal('release.branch') ?? $this->getCurrentBranch();
+
+    $this->isDeploymentEnvironment = (bool) $this->getConfigVal('deployment.branch');
+    $this->isTagDeployment = (bool) $this->getConfigVal('deployment.tag');
+    $this->deploymentRemote = $this->getConfigVal('deployment.remote') ?? 'origin';
+    $this->deploymentBranch = $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
 
     if ($this->getConfigVal('version.filename')) {
       $this->versionFilename = $this->getConfigVal('version.filename');
@@ -34,31 +48,36 @@ class RoboFile extends \Robo\Tasks
   }
 
   /**
+   * Validate configuration.
    *
    * @return void
    * @throws \Robo\Exception\TaskException
    */
   public function configValidate() {
     dump([
-      'current app branch' => $this->getAppGitBranch(),
+      'current app branch' => $this->getCurrentBranch(),
       'current app version' => $this->getAppVersion(),
       'version strategy' => $this->versionStrategy,
       'version file' => $this->versionFile,
       'version file exists' => file_exists($this->versionFile),
+      'release' => $this->getConfigVal('release'),
+      'deployment' => $this->getConfigVal('deployment'),
     ]);
   }
 
   /**
+   * Increment version and push commit.
+   *
    * @param array $options
    *
    * @return void
    * @throws \Robo\Exception\TaskException
    */
   public function releaseCommit(array $options = [
-    'message|m' => NULL,
+    'message|m' => 'Creating release commit.',
   ]) {
-    if (empty($options['message'])) {
-      $options['message'] = 'Creating release commit.';
+    if (!$this->isReleaseEnvironment) {
+      throw new \RuntimeException("Cannot perform release within configuration.");
     }
 
     $this->incrementVersion();
@@ -66,25 +85,35 @@ class RoboFile extends \Robo\Tasks
       ->stopOnFail()
       ->dir($this->appRoot)
       ->add('-A')
+      ->checkout($this->releaseBranch)
       ->commit($options['message'])
-      ->push('origin', $this->getAppGitBranch())
+      ->push($this->releaseRemote, $this->releaseBranch)
       ->run();
   }
 
   /**
+   * Tag the current version and push.
+   *
    * @return void
    */
   public function releaseTag() {
+    if (!$this->isReleaseEnvironment) {
+      throw new \RuntimeException("Cannot perform release within configuration.");
+    }
+
     $version = $this->getAppVersion();
     $this->taskGitStack()
       ->stopOnFail()
       ->dir($this->appRoot)
+      ->checkout($this->releaseBranch)
       ->tag($version)
-      ->push('origin', $version)
+      ->push($this->releaseRemote, $version)
       ->run();
   }
 
   /**
+   * Get the current tracked app version.
+   *
    * @return string
    */
   protected function getAppVersion() {
@@ -92,10 +121,12 @@ class RoboFile extends \Robo\Tasks
   }
 
   /**
+   * Get the name of the branch the app is on.
+   *
    * @return string|null
    * @throws \Robo\Exception\TaskException
    */
-  public function getAppGitBranch() {
+  protected function getCurrentBranch() {
     $result = $this->taskExec('git')
       ->dir($this->appRoot)
       ->args('symbolic-ref', 'HEAD')
@@ -103,7 +134,7 @@ class RoboFile extends \Robo\Tasks
       ->run();
 
     if (empty($result->getOutputData())) {
-      return $this->appDefaultBranch;
+      return $this->releaseBranch;
     }
 
     $parts = explode('/', $result->getOutputData());
@@ -111,6 +142,8 @@ class RoboFile extends \Robo\Tasks
   }
 
   /**
+   * Increment tracked app version.
+   *
    * @return void
    * @throws \Robo\Exception\TaskException
    */
