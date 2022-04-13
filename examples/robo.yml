@@ -6,6 +6,8 @@ version:
 release:
   remote: origin # default: origin
   branch: test   # default: current branch name
+  sync_branches: # Optionally sync additional branches on release commit.
+    - production
 deployment:
   remote: origin # default: origin
   branch: test   # default: current branch name

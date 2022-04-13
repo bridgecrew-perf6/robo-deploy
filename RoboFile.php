@@ -89,6 +89,21 @@ class RoboFile extends \Robo\Tasks
       ->commit($options['message'])
       ->push($this->releaseRemote, $this->releaseBranch)
       ->run();
+
+    if ($this->getConfigVal('release.sync_branches')) {
+      $sync_branches = (array) $this->getConfigVal('release.sync_branches');
+      $git = $this->taskGitStack()
+        ->stopOnFail()
+        ->dir($this->appRoot);
+      foreach ($sync_branches as $branch) {
+        $git
+          ->checkout($branch)
+          ->merge($this->releaseBranch)
+          ->push($this->releaseRemote, $branch);
+      }
+
+      $git->run();
+    }
   }
 
   /**
