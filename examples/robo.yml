@@ -5,12 +5,14 @@ version:
   strategy: datetime             # incremental|datetime - default: datetime
   filename: .robo-deploy-version # default: '.robo-deploy-version'
 
+# When this environment is tagged for release to another environment, these details are required.
 release:
   remote: origin # default: origin
   branch: test   # default: current branch name
   sync_branches: # Optionally sync additional branches on release commit.
     - production
 
+# When this environment is updated from another environment, these details are required.
 deployment:
   remote: origin # default: origin
   branch: test   # default: current branch name

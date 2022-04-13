@@ -1,0 +1,33 @@
+name: Deploy Test Code to Live
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  copying-code:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # Change 'domain'.
+          config: "Host domain\n  StrictHostKeyChecking no"
+          known_hosts: ' '
+
+      - name: Committing Test Code
+        env:
+          connection: username@test-server
+          port: 22
+          robo_app_root: /home/username/.robo/deploy-app
+        run: |
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:commit -m \"${{ github.actor }}: Updates from test site.\""
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:tag"
+
+      - name: Updating Live Code
+        env:
+          connection: username@live-server
+          port: 22
+          robo_app_root: /home/username/.robo/deploy-app
+        run: |
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo deploy:tag"
