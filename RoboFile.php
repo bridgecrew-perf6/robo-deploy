@@ -28,14 +28,14 @@ class RoboFile extends \Robo\Tasks
   public function __construct() {
     $this->appRoot = $this->requireConfigVal('app.root');
 
-    $this->isReleaseEnvironment = (bool) $this->getConfigVal('release.branch');
+    $this->isReleaseEnvironment = (bool) $this->getConfigVal('release');
     $this->releaseRemote = $this->getConfigVal('release.remote') ?? 'origin';
-    $this->releaseBranch = $this->getConfigVal('release.branch') ?? $this->getCurrentBranch();
+    $this->releaseBranch = $this->getConfigVal('release.branch');
 
-    $this->isDeploymentEnvironment = (bool) $this->getConfigVal('deployment.branch');
-    $this->isTagDeployment = (bool) $this->getConfigVal('deployment.tag');
+    $this->isDeploymentEnvironment = (bool) $this->getConfigVal('deployment');
+    //$this->isTagDeployment = (bool) $this->getConfigVal('deployment.tag');
     $this->deploymentRemote = $this->getConfigVal('deployment.remote') ?? 'origin';
-    $this->deploymentBranch = $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
+    $this->deploymentBranch = $this->getConfigVal('deployment.branch');
 
     if ($this->getConfigVal('version.filename')) {
       $this->versionFilename = $this->getConfigVal('version.filename');
@@ -79,6 +79,9 @@ class RoboFile extends \Robo\Tasks
     if (!$this->isReleaseEnvironment) {
       throw new \RuntimeException("Cannot perform release within configuration.");
     }
+    if (!$this->releaseBranch) {
+      $this->releaseBranch = $this->getCurrentBranch();
+    }
 
     $this->incrementVersion();
     $this->taskGitStack()
@@ -115,6 +118,9 @@ class RoboFile extends \Robo\Tasks
   public function releaseTag() {
     if (!$this->isReleaseEnvironment) {
       throw new \RuntimeException("Cannot perform release within configuration.");
+    }
+    if (!$this->releaseBranch) {
+      $this->releaseBranch = $this->getCurrentBranch();
     }
 
     $version = $this->getAppVersion();
@@ -186,8 +192,7 @@ class RoboFile extends \Robo\Tasks
     if (!$this->isDeploymentEnvironment) {
       throw new \RuntimeException("Cannot perform deployment within configuration.");
     }
-
-    $branch = $options['branch'] ?? $this->requireConfigVal('deployment.branch');
+    $this->deploymentBranch = $options['branch'] ?? $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
     $this->taskExecStack()
       ->stopOnFail()
       ->dir($this->appRoot)
@@ -197,8 +202,8 @@ class RoboFile extends \Robo\Tasks
     $this->taskGitStack()
       ->stopOnFail()
       ->dir($this->appRoot)
-      ->checkout($branch)
-      ->pull($this->deploymentRemote, $branch)
+      ->checkout($this->deploymentBranch)
+      ->pull($this->deploymentRemote, $this->deploymentBranch)
       ->run();
   }
 
