@@ -21,8 +21,8 @@ jobs:
           port: 22
           robo_app_root: /home/username/.robo/deploy-app
         run: |
-          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:commit -m \"${{ github.actor }}: Updates from test site.\""
-          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:tag"
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:commit test -m \"${{ github.actor }}: Updates from test site.\""
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo release:tag test"
 
       - name: Updating Live Code
         env:
@@ -30,4 +30,4 @@ jobs:
           port: 22
           robo_app_root: /home/username/.robo/deploy-app
         run: |
-          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo deploy:tag"
+          ssh $connection -p $port "cd $robo_app_root && ./vendor/bin/robo deploy:tag live"

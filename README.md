@@ -9,13 +9,13 @@ Utility for handling deployments for a self-hosted website.
 
 ## Commands
 
-| Command                | Description                                                                        |
-|------------------------|------------------------------------------------------------------------------------|
-| `robo config:validate` | Simple robo.yml validation.                                                        |
-| `robo release:commit`  | Add, commit, and push all existing file changes.                                   |
-| `robo release:tag`     | Tag the current git status and push the tag.                                       |
-| `robo deploy:branch`   | Checkout and pull a branch.                                                        |
-| `robo deploy:tag`      | Fetch changes and checkout the tag that correlates with the version file contents. |
+| Command                                  | Description                                                                        |
+|------------------------------------------|------------------------------------------------------------------------------------|
+| `robo config:validate`                   | Simple robo.yml validation.                                                        |
+| `robo release:commit <environment name>` | Add, commit, and push all existing file changes.                                   |
+| `robo release:tag <environment name>`    | Tag the current git status and push the tag.                                       |
+| `robo deploy:branch <environment name>`  | Checkout and pull a branch.                                                        |
+| `robo deploy:tag <environment name>`     | Fetch changes and checkout the tag that correlates with the version file contents. |
 
 
 ## Examples

@@ -1,5 +1,8 @@
 <?php
 
+use DagLab\RoboDeploy\EnvironmentFactory;
+use DagLab\RoboDeploy\Model\EnvironmentInterface;
+
 /**
  * This is project's console commands configuration for Robo task runner.
  *
@@ -10,32 +13,50 @@ class RoboFile extends \Robo\Tasks
   use \Kerasai\Robo\Config\ConfigHelperTrait;
 
   protected $appRoot;
-  protected $isReleaseEnvironment = FALSE;
-  protected $releaseRemote;
-  protected $releaseBranch;
-  protected $isDeploymentEnvironment = FALSE;
-  protected $isTagDeployment = FALSE;
-  protected $deploymentRemote;
-  protected $deploymentBranch;
-  protected $versionFile;
-  protected $versionStrategies = ['datetime', 'incremental'];
-  protected $versionStrategy = 'datetime';
+
+  /**
+   * @var array
+   */
+  protected $environmentsConfig = [];
+
+  /**
+   * @var \DagLab\RoboDeploy\Model\EnvironmentInterface[]
+   */
+  protected $environments = [];
+
+  /**
+   * Filename for the app's version file.
+   *
+   * @var mixed|string
+   */
   protected $versionFilename = '.robo-deploy-version';
+
+  /**
+   * Absolute path to version file.
+   *
+   * @var string
+   */
+  protected $versionFile;
+
+  /**
+   * Options for versioning strategies.
+   *
+   * @var string[]
+   */
+  protected $versionStrategies = ['datetime', 'incremental'];
+
+  /**
+   * Current version strategy.
+   *
+   * @var mixed|string
+   */
+  protected $versionStrategy = 'datetime';
 
   /**
    * RoboFile constructor.
    */
   public function __construct() {
-    $this->appRoot = $this->requireConfigVal('app.root');
-
-    $this->isReleaseEnvironment = (bool) $this->getConfigVal('release');
-    $this->releaseRemote = $this->getConfigVal('release.remote') ?? 'origin';
-    $this->releaseBranch = $this->getConfigVal('release.branch');
-
-    $this->isDeploymentEnvironment = (bool) $this->getConfigVal('deployment');
-    //$this->isTagDeployment = (bool) $this->getConfigVal('deployment.tag');
-    $this->deploymentRemote = $this->getConfigVal('deployment.remote') ?? 'origin';
-    $this->deploymentBranch = $this->getConfigVal('deployment.branch');
+    $this->environmentsConfig = $this->requireConfigVal('environments');
 
     if ($this->getConfigVal('version.filename')) {
       $this->versionFilename = $this->getConfigVal('version.filename');
@@ -43,8 +64,58 @@ class RoboFile extends \Robo\Tasks
     if ($this->getConfigVal('version.strategy') && in_array($this->getConfigVal('version.strategy'), $this->versionStrategies)) {
       $this->versionStrategy = $this->getConfigVal('version.strategy');
     }
+  }
 
-    $this->versionFile = rtrim($this->appRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $this->versionFilename;
+  /**
+   * @return \DagLab\RoboDeploy\Model\EnvironmentInterface[]
+   * @throws \Robo\Exception\TaskException
+   */
+  protected function getEnvironments() {
+    if ($this->environments) {
+      return $this->environments;
+    }
+
+    if ($this->environmentsConfig) {
+      foreach ($this->environmentsConfig as $name => $details) {
+        $environment = EnvironmentFactory::createFromConfig($name, $details, $this->versionFilename);
+
+        // Default branches are the current branch name.
+        if ($environment->isReleaseEnvironment() && !$environment->getReleaseDetails()->getBranch()) {
+          $environment->getReleaseDetails()->setBranch($this->getCurrentBranch($environment));
+        }
+        if ($environment->isDeploymentEnvironment() && !$environment->getDeploymentDetails()->getBranch()) {
+          $environment->getDeploymentDetails()->setBranch($this->getCurrentBranch($environment));
+        }
+
+        $this->environments[$environment->getName()] = $environment;
+      }
+    }
+
+    return $this->environments;
+  }
+
+  /**
+   * @param string $name
+   *
+   * @return bool
+   * @throws \Robo\Exception\TaskException
+   */
+  protected function hasEnvironment(string $name) {
+    return isset($this->getEnvironments()[$name]);
+  }
+
+  /**
+   * @param string $name
+   *
+   * @return \DagLab\RoboDeploy\Model\EnvironmentInterface
+   * @throws \Robo\Exception\TaskException
+   */
+  protected function getEnvironment(string $name) {
+    if ($this->hasEnvironment($name)) {
+      return $this->getEnvironments()[$name];
+    }
+
+    throw new \RuntimeException("Environment not found: {$name}");
   }
 
   /**
@@ -55,97 +126,101 @@ class RoboFile extends \Robo\Tasks
    */
   public function configValidate() {
     dump([
-      'current app branch' => $this->getCurrentBranch(),
-      'current app version' => $this->getAppVersion(),
       'version strategy' => $this->versionStrategy,
       'version file' => $this->versionFile,
-      'version file exists' => file_exists($this->versionFile),
-      'release' => $this->getConfigVal('release'),
-      'deployment' => $this->getConfigVal('deployment'),
+      'environments' => $this->getEnvironments(),
     ]);
   }
 
   /**
    * Increment version and push commit.
    *
+   * @param string $environment_name
    * @param array $options
    *
-   * @return void
+   * @return \Robo\Result|null
    * @throws \Robo\Exception\TaskException
    */
-  public function releaseCommit(array $options = [
+  public function releaseCommit(string $environment_name, array $options = [
     'message|m' => 'Creating release commit.',
   ]) {
-    if (!$this->isReleaseEnvironment) {
-      throw new \RuntimeException("Cannot perform release within configuration.");
-    }
-    if (!$this->releaseBranch) {
-      $this->releaseBranch = $this->getCurrentBranch();
+    $environment = $this->getEnvironment($environment_name);
+    if (!$environment->isReleaseEnvironment()) {
+      throw new \RuntimeException("Environment {$environment->getName()} is not configured for release.");
     }
 
-    $this->incrementVersion();
-    $this->taskGitStack()
+    $this->incrementVersion($environment);
+    $git = $this->taskGitStack()
       ->stopOnFail()
-      ->dir($this->appRoot)
+      // Commit and push the release branch.
+      ->dir($environment->getRepoRoot())
       ->add('-A')
-      ->checkout($this->releaseBranch)
+      ->checkout($environment->getReleaseDetails()->getBranch())
       ->commit($options['message'])
-      ->push($this->releaseRemote, $this->releaseBranch)
-      ->run();
+      ->push(
+        $environment->getReleaseDetails()->getRemote(),
+        $environment->getReleaseDetails()->getBranch()
+      );
 
-    if ($this->getConfigVal('release.sync_branches')) {
-      $sync_branches = (array) $this->getConfigVal('release.sync_branches');
-      $git = $this->taskGitStack()
-        ->stopOnFail()
-        ->dir($this->appRoot);
-      foreach ($sync_branches as $branch) {
+    if ($environment->getReleaseDetails()->shouldSyncBranches()) {
+      foreach ($environment->getReleaseDetails()->getSyncBranches() as $branch) {
         $git
+          // Checkout sync branch, merge with release branch, and push.
           ->checkout($branch)
-          ->merge($this->releaseBranch)
-          ->push($this->releaseRemote, $branch);
+          ->merge($environment->getReleaseDetails()->getBranch())
+          ->push(
+            $environment->getReleaseDetails()->getRemote(),
+            $branch
+          );
       }
 
-      $git->checkout($this->releaseBranch);
-      $git->run();
+      // Return to the release branch.
+      $git->checkout($environment->getReleaseDetails()->getBranch());
     }
+
+    return $git->run();
   }
 
   /**
    * Tag the current version and push.
    *
-   * @return void
+   * @param string $environment_name
+   *
+   * @return \Robo\Result|null
+   * @throws \Robo\Exception\TaskException
    */
-  public function releaseTag() {
-    if (!$this->isReleaseEnvironment) {
-      throw new \RuntimeException("Cannot perform release within configuration.");
-    }
-    if (!$this->releaseBranch) {
-      $this->releaseBranch = $this->getCurrentBranch();
+  public function releaseTag(string $environment_name) {
+    $environment = $this->getEnvironment($environment_name);
+    if (!$environment->isReleaseEnvironment()) {
+      throw new \RuntimeException("Environment {$environment->getName()} is not configured for release.");
     }
 
-    $version = $this->getAppVersion();
-    $this->taskGitStack()
+    $version = $this->getAppVersion($environment);
+    return $this->taskGitStack()
       ->stopOnFail()
-      ->dir($this->appRoot)
-      ->checkout($this->releaseBranch)
+      ->dir($environment->getRepoRoot())
+      ->checkout($environment->getReleaseDetails()->getBranch())
       ->tag($version)
-      ->push($this->releaseRemote, $version)
+      ->push($environment->getReleaseDetails()->getRemote(), $version)
       ->run();
   }
 
   /**
-   * Deploy a tag of the app.
+   * Deploy a tag of the environment.
    *
+   * @param string $environment_name
    * @param array $options
    *
-   * @return void
+   * @return \Robo\Result|null
+   * @throws \Robo\Exception\TaskException
    */
-  public function deployTag(array $options = [
+  public function deployTag(string $environment_name, array $options = [
     'reset' => TRUE,
     'tag|t' => NULL,
   ]) {
-    if (!$this->isDeploymentEnvironment) {
-      throw new \RuntimeException("Cannot perform deployment within configuration.");
+    $environment = $this->getEnvironment($environment_name);
+    if (!$environment->isDeploymentEnvironment()) {
+      throw new \RuntimeException("Environment {$environment->getName()} is not configured for deployment.");
     }
 
     $tag = $options['tag'];
@@ -154,25 +229,25 @@ class RoboFile extends \Robo\Tasks
     if (!$tag) {
       $this->taskExecStack()
         ->stopOnFail()
-        ->dir($this->appRoot)
+        ->dir($environment->getRepoRoot())
         ->exec('git fetch --all --prune')
-        ->exec("git checkout {$this->deploymentRemote}/{$this->deploymentBranch} -- {$this->versionFilename}")
+        ->exec("git checkout {$environment->getDeploymentDetails()->getRemote()}/{$environment->getDeploymentDetails()->getBranch()} -- {$this->versionFilename}")
         ->run();
 
-      $tag = $this->getAppVersion();
+      $tag = $this->getAppVersion($environment);
     }
 
     if ($options['reset']) {
       $this->taskExecStack()
         ->stopOnFail()
-        ->dir($this->appRoot)
-        ->exec("git reset --hard {$this->deploymentRemote}/{$this->deploymentBranch}")
+        ->dir($environment->getRepoRoot())
+        ->exec("git reset --hard {$environment->getDeploymentDetails()->getRemote()}/{$environment->getDeploymentDetails()->getBranch()}")
         ->run();
     }
 
-    $this->taskGitStack()
+    return $this->taskGitStack()
       ->stopOnFail()
-      ->dir($this->appRoot)
+      ->dir($environment->getRepoRoot())
       ->checkout($tag)
       ->run();
   }
@@ -180,76 +255,73 @@ class RoboFile extends \Robo\Tasks
   /**
    * Deploy a branch updates.
    *
+   * @param string $environment_name
    * @param array $options
    *
-   * @return void
+   * @return \Robo\Result|null
    * @throws \Robo\Exception\TaskException
    */
-  public function deployBranch(array $options = [
+  public function deployBranch(string $environment_name, array $options = [
     'reset' => TRUE,
     'branch|b' => NULL,
   ]) {
-    $this->deploymentBranch = $options['branch'] ?? $this->getConfigVal('deployment.branch') ?? $this->getCurrentBranch();
-
-    if (!$this->isDeploymentEnvironment) {
-      throw new \RuntimeException("Cannot perform deployment within configuration.");
-    }
-    if (!$this->deploymentBranch) {
-      throw new \RuntimeException("Cannot perform deployment. No branch defined.");
+    $environment = $this->getEnvironment($environment_name);
+    if (!$environment->isDeploymentEnvironment()) {
+      throw new \RuntimeException("Environment {$environment->getName()} is not configured for deployment.");
     }
 
     $this->taskExecStack()
       ->stopOnFail()
-      ->dir($this->appRoot)
+      ->dir($environment->getRepoRoot())
       ->exec('git fetch --all --prune')
       ->run();
 
-    $this->taskGitStack()
+    return $this->taskGitStack()
       ->stopOnFail()
-      ->dir($this->appRoot)
-      ->checkout($this->deploymentBranch)
-      ->pull($this->deploymentRemote, $this->deploymentBranch)
+      ->dir($environment->getRepoRoot())
+      ->checkout($environment->getDeploymentDetails()->getBranch())
+      ->pull($environment->getDeploymentDetails()->getRemote(), $environment->getDeploymentDetails()->getBranch())
       ->run();
   }
 
   /**
    * Get the current tracked app version.
    *
+   * @param \DagLab\RoboDeploy\Model\EnvironmentInterface $environment
+   *
    * @return string
    */
-  protected function getAppVersion() {
-    return $this->taskSemVer($this->versionFile)->__toString();
+  protected function getAppVersion(EnvironmentInterface $environment) {
+    return $this->taskSemVer($environment->getVersionFile()->getPath())->__toString();
   }
 
   /**
    * Get the name of the branch the app is on.
    *
+   * @param \DagLab\RoboDeploy\Model\EnvironmentInterface $environment
+   *
    * @return string|null
-   * @throws \Robo\Exception\TaskException
    */
-  protected function getCurrentBranch() {
+  protected function getCurrentBranch(EnvironmentInterface $environment) {
     $result = $this->taskExec('git')
-      ->dir($this->appRoot)
-      ->args('symbolic-ref', 'HEAD')
+      ->dir($environment->getRepoRoot())
+      ->args('symbolic-ref', '--short', 'HEAD')
       ->printOutput(false)
       ->run();
 
-    if (empty($result->getOutputData())) {
-      return $this->releaseBranch;
-    }
-
-    $parts = explode('/', $result->getOutputData());
-    return end($parts);
+    return $result->getOutputData() ?: NULL;
   }
 
   /**
    * Increment tracked app version.
    *
-   * @return void
+   * @param \DagLab\RoboDeploy\Model\EnvironmentInterface $environment
+   *
+   * @return \Robo\Result
    * @throws \Robo\Exception\TaskException
    */
-  protected function incrementVersion() {
-    $semver = $this->taskSemVer($this->versionFile);
+  protected function incrementVersion(EnvironmentInterface $environment) {
+    $semver = $this->taskSemVer($environment->getVersionFile()->getPath());
     switch ($this->versionStrategy) {
       case 'datetime':
         $date = new DateTime();
@@ -263,7 +335,7 @@ class RoboFile extends \Robo\Tasks
         break;
     }
 
-    $semver->run();
+    return $semver->run();
   }
 
 }
