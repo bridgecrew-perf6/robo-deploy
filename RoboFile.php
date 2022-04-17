@@ -248,6 +248,8 @@ class RoboFile extends \Robo\Tasks
     return $this->taskGitStack()
       ->stopOnFail()
       ->dir($environment->getRepoRoot())
+      ->checkout($environment->getDeploymentDetails()->getBranch())
+      ->pull($environment->getDeploymentDetails()->getRemote(), $environment->getDeploymentDetails()->getBranch())
       ->checkout($tag)
       ->run();
   }
@@ -275,6 +277,14 @@ class RoboFile extends \Robo\Tasks
       ->dir($environment->getRepoRoot())
       ->exec('git fetch --all --prune')
       ->run();
+
+    if ($options['reset']) {
+      $this->taskExecStack()
+        ->stopOnFail()
+        ->dir($environment->getRepoRoot())
+        ->exec("git reset --hard {$environment->getDeploymentDetails()->getRemote()}/{$environment->getDeploymentDetails()->getBranch()}")
+        ->run();
+    }
 
     return $this->taskGitStack()
       ->stopOnFail()
