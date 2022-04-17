@@ -32,7 +32,7 @@ class EnvironmentFactory {
       $environment->setReleaseDetails(new ReleaseDetails(
         $environment_details['release']['remote'] ?? 'origin',
         $environment_details['release']['branch'] ?? NULL,
-        $environment_details['release']['sync_branch'] ?? []
+        $environment_details['release']['sync_branches'] ?? []
       ));
     }
 
