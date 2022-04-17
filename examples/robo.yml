@@ -1,18 +1,40 @@
-app:
-  root: /app/web
-
+# Versioning configuration.
 version:
-  strategy: datetime             # incremental|datetime - default: datetime
-  filename: .robo-deploy-version # default: '.robo-deploy-version'
+  # incremental|datetime - default: datetime
+  strategy: datetime
+  # default: '.robo-deploy-version'
+  filename: .robo-deploy-version
 
-# When this environment is tagged for release to another environment, these details are required.
-release:
-  remote: origin # default: origin
-  branch: test   # default: current branch name
-  sync_branches: # Optionally sync additional branches on release commit.
-    - production
+# Environments configuration.
+environments:
+  # Environment name.
+  test:
+    repo_root: /app/web/test # required: absolute path to repo root.
+    # Environment's release configuration.
+    # Required when releases happen FROM this environment.
+    release:
+      # The branch that is being released.
+      # default: current branch name
+      branch: test
+      # default: origin
+      remote: origin
+      # Optionally sync additional branches on release commit.
+      sync_branches:
+        - production
 
-# When this environment is updated from another environment, these details are required.
-deployment:
-  remote: origin # default: origin
-  branch: test   # default: current branch name
+    # Environment's release configuration.
+    # Required when deployments happen TO this environment.
+    deployment:
+      # The branch that acts as the main branch being deployed.
+      # default: current branch name
+      branch: test
+      # default: origin
+      remote: origin
+
+  # Environment name.
+  live:
+    repo_root: /app/web/live # required: absolute path to repo root.
+
+    deployment:
+      branch: production # default: current branch name
+      remote: origin     # default: origin
