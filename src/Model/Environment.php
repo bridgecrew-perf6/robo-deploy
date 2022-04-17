@@ -91,7 +91,7 @@ class Environment implements EnvironmentInterface {
    * @inheritDoc
    */
   public function getDeploymentDetails() {
-    return $this->releaseDetails;
+    return $this->deploymentDetails;
   }
 
   /**
